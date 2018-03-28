@@ -1,0 +1,13 @@
+---
+# Defaults for database backups
+
+backups_path: /etc/postgresql/10/backups/
+enable_custom_backups: "yes"
+enable_plain_backups: "no"
+enable_globals_backups: "no"
+days_to_keep: 60
+backup_hour: 2
+
+db_name: test_db
+db_user: test_user
+db_password: test_password

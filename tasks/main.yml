@@ -1,0 +1,99 @@
+---
+
+- name: DB | Add the PostgreSQL repository key to the apt trusted keys
+  apt_key:
+    url: https://www.postgresql.org/media/keys/ACCC4CF8.asc
+    state: present
+  tags: packages
+
+- name: DB | Add the PostgreSQL repository to the apt sources list
+  apt_repository:
+    repo: 'deb http://apt.postgresql.org/pub/repos/apt/ {{ ansible_distribution_release }}-pgdg main'
+    update_cache: yes
+    state: present
+  tags: packages
+
+- name: DB | Ensure Postgresql packages are present
+  package:
+    name: "{{ item }}"
+    state: present
+  with_items:
+    - postgresql-10
+    - postgresql-contrib
+    - libpq-dev
+    - python-psycopg2
+  tags: packages
+
+- name: DB | Ensure service is running
+  service:
+    name: postgresql
+    state: started
+    enabled: yes
+
+- name: DB | Ensure database is created
+  become: yes
+  become_user: postgres
+  become_method: sudo
+  postgresql_db:
+    name: "{{ db_name }}"
+  notify: restart postgresql
+
+- name: DB | Ensure user has access to database
+  become: yes
+  become_user: postgres
+  become_method: sudo
+  postgresql_user:
+    db: "{{ db_name }}"
+    name: "{{ db_user }}"
+    password: "{{ db_password }}"
+    encrypted: yes
+    priv: ALL
+  notify: restart postgresql
+
+- name: DB | Ensure user does not have unnecessary privilege
+  become: yes
+  become_user: postgres
+  become_method: sudo
+  postgresql_user:
+    name: "{{ db_user }}"
+    role_attr_flags: NOSUPERUSER,NOCREATEDB
+  notify: restart postgresql
+
+- name: DB | Ensure no other user can access the database
+  become: yes
+  become_user: postgres
+  become_method: sudo
+  postgresql_privs:
+    db: "{{ db_name }}"
+    role: PUBLIC
+    type: database
+    priv: ALL
+    state: absent
+  notify: restart postgresql
+
+- name: DB | Copy rotated backup script
+  copy:
+    src: pg_backup_rotated.sh
+    dest: /etc/postgresql/10/pg_backup_rotated.sh
+    owner: root
+    group: root
+    mode: 0755
+
+- name: DB | Copy backup config
+  template:
+    src: pg_backup.config.j2
+    dest: /etc/postgresql/10/pg_backup.config
+
+- name: DB | Create pgpass file
+  template:
+    src: pgpass.j2
+    dest: /root/.pgpass
+    mode: 0400
+
+- name: DB | Setup cron backup
+  cron:
+    name: scheduled backup
+    hour: "{{ backup_hour }}"
+    minute: 0
+    job: "/etc/postgresql/10/pg_backup_rotated.sh"
+    state: present
