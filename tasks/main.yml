@@ -13,12 +13,27 @@
     state: present
   tags: packages
 
+- name: Check if unattended upgrades exists
+  stat: 
+    path: /etc/apt/apt.conf.d/50unattended-upgrades
+  register: unattended_upgrades
+  tags: packages
+
+- name: Add postgresql to unattended upgrades conf
+  lineinfile:
+    path: /etc/apt/apt.conf.d/50unattended-upgrades
+    insertafter: '^Unattended-Upgrade::Origins-Pattern {'
+    line: '"origin=apt.postgresql.org";'
+  when: unattended_upgrades.stat.exists
+  tags: packages
+
 - name: DB | Ensure Postgresql packages are present
   package:
     name: "{{ item }}"
-    state: present
+    state: latest
   with_items:
     - postgresql-10
+    - postgresql-client-10
     - postgresql-contrib
     - libpq-dev
     - python-psycopg2
